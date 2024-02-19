@@ -51,7 +51,7 @@ def main():
         st.header("🚀 Optimized Prompt")
         st.code(response["optimized_prompt"], language="txt", line_numbers=True)
         st.header("❗️ Required Info")
-        formatting = "<div style='background-color: lightgrey; box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1); padding: 10px; border-radius: 5px; margin: 5px;'>{input}</div>"
+        formatting = "<div style='background-color: lightgrey;  color: black; box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1); padding: 10px; border-radius: 5px; margin: 5px;'>{input}</div>"
         st.write(formatting.format(input=response["required_info"]), unsafe_allow_html=True)
 
         st.markdown("---")
