@@ -64,9 +64,11 @@ class App:
         prompt = """
 ### INSTRUCTIONS ###
 Given the following guidelines, please optimize the provided query for an LLM. 
+{format_instructions}
+
 ## NOTE ## 
 Your task is not to respond to the query to optimize, but to refine it based on the given guidelines. 
-{format_instructions}
+Add newlines to the optimized query as needed.
 
 ### INPUTS ###
 
