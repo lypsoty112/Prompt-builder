@@ -60,26 +60,111 @@ class App:
         }
         
     def _build_chain(self) -> LLMChain:
-        prompt_dict = json.load(open("./src/data/prompt.json", "r"))
-        assert prompt_dict is not None, "Internal error: 1."
-        assert isinstance(prompt_dict, dict), "Internal error: 2."
-        assert "prompt" in prompt_dict, "Internal error: 3."
+        # NOTE: Experimental, remove later
+        prompt = """
+### INSTRUCTIONS ###
+Given the following guidelines, please optimize the provided query for an LLM. 
+## NOTE ## 
+Your task is not to respond to the query to optimize, but to refine it based on the given guidelines. 
+{format_instructions}
 
-        prompt = prompt_dict["prompt"]
-        assert prompt is not None, "Internal error: 4."
-        assert isinstance(prompt, str), "Internal error: 5."
-        assert len(prompt) > 0, "Internal error: 6."
+### INPUTS ###
 
-        guidelines_dict = json.load(open("./src/data/guidelines.json", "r"))
-        assert guidelines_dict is not None, "Internal error: 8."
-        assert isinstance(guidelines_dict, dict), "Internal error: 9."
-        assert "guidelines" in guidelines_dict, "Internal error: 10."
+## GUIDELINES ##
+```plaintext
+{guidelines}
+```
 
-        guidelines = guidelines_dict["guidelines"]
-        assert guidelines is not None, "Internal error: 11."
-        assert isinstance(guidelines, str), "Internal error: 12."
-        assert len(guidelines) > 0, "Internal error: 13."
+## QUERY TO OPTIMIZE ##
+```plaintext
+{prompt_to_optimize}
+```
 
+"""
+        guidelines = """
+1. Be Concise:
+    - Avoid politeness in your query.
+    - Get straight to the point.
+
+2. Audience Integration:
+    - Make sure your query mentions the intended audience for the response. 
+
+3. Affirmative Directives:
+    - Use affirmative language like 'do'.
+    - Avoid negatives like 'don't'.
+    - Example: "Don't forget to..." becomes "Remember to..."
+
+4. Clarity Prompt:
+    - When asking for clarification about a certain topic, use 1 of the following formats:
+        - "Explain [TOPIC] in simple terms."
+        - "Explain to me like I'm a beginner in [FIELD]"
+        - "Write your answer using simple language like you're explaining something to a 5-year-old."
+        - Add "Explain to me like I'm 11 years old." at the end of the query.
+
+5. Tip Incentive:
+    - Offer a tip for better solutions.
+    - Example: "I'll tip $xxx for a better solution."
+
+6. Example-Driven Querying:
+    - Use examples for clarity when applicable.
+
+7. Formatting:
+    - When formatting your query, start with ‘###Instruction###’, followed by either ‘###Example###’ or ‘###Question###’ if relevant. Subsequently, present your content. Use one or more line breaks to separate instructions, examples, questions, context, and input data.
+
+8. Task and Requirement:
+    - Incorporate the following phrases: 
+        - "Your task is to..."
+        - "You MUST..."
+
+9. Penalization Warning:
+    - Incorporate the following phrases: 
+        - "You will be penalized..."
+
+10.Natural Response:
+    - Use the phrase "Answer a question given in a natural, human-like manner" in your query.
+
+11. Leading Words:
+    - Guide step-by-step thinking.
+    - Use leading words like writing "think step by step"
+
+12. Unbiased Response:
+    - Add to your query the following phrase "Ensure that your answer is unbiased and avoids relying on stereotypes."
+
+13. Testing Understanding:
+    - To inquire about a specific topic or idea or any information and you want to test your understanding, you can use the following phrase: "Teach me any [theorem/topic/rule name] and include a test at the end, and let me know if my answers are correct after I respond, without providing the answers beforehand."
+
+14. Assign Role:
+    - Assign a role to the LLM.
+    - Example: "Your role is..."
+
+15. Delimiters Usage:
+    - Employ delimiters.
+
+16. Repetition:
+    -  Repeat a specific word or phrase multiple times within a query.
+
+17. Output Primers:
+    - Use output primers, which involve concluding your query with the beginning of the desired output. Utilize output primers by ending your prompt with the start of the anticipated response.
+
+18. Detailed Content:
+    - To write an essay /text /paragraph /article or any type of text that should be detailed: "Write a detailed [essay/text /paragraph] for me on [topic] in detail by adding all the information necessary".
+
+19. Text Correction:
+    - To correct/change specific text without changing its style: "Try to revise every paragraph sent by users. You should only improve the user’s grammar and vocabulary and make sure it sounds natural. You should maintain the original writing style, ensuring that a formal paragraph remains formal."
+
+20. Complex Coding Query:
+    - When you have a complex coding query that may be in different files: "From now and on whenever you generate code that spans more than one file, generate a [programming language ] script that can be run to automatically create the specified files or make changes to existing files to insert the generated code. [your question]".
+
+21. Initiate or Continue Text:
+    - When you want to initiate or continue a text using specific words, phrases, or sentences, utilize the following query: "I’m providing you with the beginning [song lyrics/story/paragraph/essay...]: [Insert lyrics/words/sentence]. Finish it based on the words provided. Keep the flow consistent."
+
+22. Clear Requirements:
+    - Clearly state the requirements that the model must follow in order to produce content, in the form of the keywords, regulations, hint, or instructions
+
+23. Text Similarity:
+    - To write any text, such as an essay or paragraph, that is intended to be similar to a provided sample, include the following instructions: "Use the same language based on the provided paragraph[/title/text /essay/answer]".
+        """
+        
         optimizer_output_parser = StructuredOutputParser(response_schemas=[
             ResponseSchema(name="optimized_prompt", description="This is the optimized prompt that was generated by following the guidelines."),
             ResponseSchema(name="required_info", description="This is the additional information that was required to optimize the prompt. If no additional information was required, respond by saying 'No additional information was required.'."),
