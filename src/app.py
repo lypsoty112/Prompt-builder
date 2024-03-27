@@ -1,67 +1,11 @@
-
-from langchain_openai import OpenAI
+from langchain_openai import ChatOpenAI
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 from langchain.output_parsers import StructuredOutputParser, ResponseSchema
-import json
-import os
-import traceback
+from langchain.output_parsers import OutputFixingParser
 
 
-class App:
-    def __init__(self) -> None:
-        self.__key: str = None
-        self.__client: OpenAI = None
-    
-    @property
-    def key(self) -> str:
-        return self.__key
-    
-    @key.setter
-    def key(self, value: str):
-        value = value.strip()
-        assert value is not None, "The API key cannot be None."
-        assert isinstance(value, str), "The API key must be a string."
-        assert len(value) > 0, "The API key cannot be an empty string."
-
-        self.__key = value
-        self.__client = OpenAI(api_key=self.__key, temperature=.7, max_tokens=1500, max_retries=3)
-
-    def run(self, prompt: str) -> dict:
-        try: 
-            return self._run(prompt=prompt)
-        except Exception as e:
-            return {
-                "status": "error",
-                "message": str(e) + ": " + traceback.format_exc() if os.getenv("logging", "INFO") == "DEBUG" else str(e)
-            }
-    def _run(self, prompt: str) -> dict:
-        assert prompt is not None, "The prompt cannot be None."
-        assert isinstance(prompt, str), "The prompt must be a string."
-        assert len(prompt) > 0, "The prompt cannot be an empty string."
-        assert len(prompt.split()) <= 2500 * 4/3, f"The prompt cannot exceed {2500 * 4/3} words."
-
-
-        chain: LLMChain = self._build_chain()
-        assert chain is not None, "Internal error: 7."
-
-        response = chain.invoke(input={
-            "prompt_to_optimize": prompt,
-        })
-
-        assert response is not None
-        assert response["text"] is not None 
-
-        response = response["text"]
-        return {
-            "status": "success",
-            "optimized_prompt": response["optimized_prompt"],
-            "required_info": response["required_info"],
-        }
-        
-    def _build_chain(self) -> LLMChain:
-        # NOTE: Experimental, remove later
-        prompt = """
+PROMPT = """
 ### INSTRUCTIONS ###
 Given the following guidelines, please optimize the provided query for an LLM. 
 {format_instructions}
@@ -81,100 +25,134 @@ Add newlines to the optimized query as needed.
 ```plaintext
 {prompt_to_optimize}
 ```
+""".strip()
 
+GUIDELINES = """
+Here are some key principles and best practices for prompt engineering with large language models:
+
+1. Give Clear Instructions:
+- Provide detailed, step-by-step instructions on the task you want the model to perform
+- Make the instructions clear, specific, and unambiguous
+- Define constraints or format requirements for the desired output
+
+2. Use Examples/Few-Shot Prompting:
+- Include a few examples of inputs and expected outputs in the prompt
+- Examples help demonstrate the task and show the model patterns to follow
+- Use varied examples to cover different cases and edge conditions
+
+3. Add Relevant Context:
+- Provide necessary context or background information the model needs
+- Context helps the model better understand constraints and generate more relevant outputs
+
+4. Use Input/Output Prefixes:
+- Add prefixes to demarcate different components (instructions, input, output, examples)
+- Prefixes provide semantic signals to the model
+
+5. Let Model Complete Partial Inputs:
+- Provide a partial input and let the model complete or extend it
+- Can be easier than describing the entire task
+
+6. Break Down Complex Tasks:
+- Split complex tasks into sequences of simpler prompts
+- Chain prompts so output of one becomes input to the next
+- Aggregate parallel subtask outputs into the final output
+
+7. Experiment with Parameters:
+- Temperature: Higher for more diversity, lower for more grounded outputs
+- Top-k/Top-p: Higher for more randomness, lower for deterministic sampling
+- Vary parameters to see what works best for your use case
+
+8. Iterative Refinement:
+- Prompt engineering requires extensive testing and iteration
+- Try rephrasing prompts, using analogous tasks, reordering components
+- Increase temperature if getting "safeguarded" responses
+
+9. Test Systematically:
+- Define clear benchmarks and success criteria
+- Create a test suite with representative examples 
+- Measure outputs against gold-standard answers
+
+The key is writing prompts that provide clear guidance to the model while leveraging its capabilities. It often takes
+ iterative refinement to find optimal prompts for each specific use case. 
+ Systematic testing against benchmarks is crucial.  
 """
-        guidelines = """
-1. Be Concise:
-    - Avoid politeness in your query.
-    - Get straight to the point.
 
-2. Audience Integration:
-    - Make sure your query mentions the intended audience for the response. 
 
-3. Affirmative Directives:
-    - Use affirmative language like 'do'.
-    - Avoid negatives like 'don't'.
-    - Example: "Don't forget to..." becomes "Remember to..."
+class App:
+    def __init__(self) -> None:
+        self.__key: str | None = None
+        self.__client: ChatOpenAI | None = None
 
-4. Clarity Prompt:
-    - When asking for clarification about a certain topic, use 1 of the following formats:
-        - "Explain [TOPIC] in simple terms."
-        - "Explain to me like I'm a beginner in [FIELD]"
-        - "Write your answer using simple language like you're explaining something to a 5-year-old."
-        - Add "Explain to me like I'm 11 years old." at the end of the query.
+    @property
+    def key(self) -> str:
+        return self.__key
 
-5. Tip Incentive:
-    - Offer a tip for better solutions.
-    - Example: "I'll tip $xxx for a better solution."
+    @key.setter
+    def key(self, value: str):
+        value = value.strip()
+        assert value is not None, "The API key cannot be None."
+        assert isinstance(value, str), "The API key must be a string."
+        assert len(value) > 0, "The API key cannot be an empty string."
 
-6. Example-Driven Querying:
-    - Use examples for clarity when applicable.
+        self.__key = value
+        self.__client = ChatOpenAI(api_key=self.__key,
+                                   model_name="gpt-4-0613",
+                                   temperature=.2,
+                                   max_tokens=2000,
+                                   max_retries=3)
 
-7. Formatting:
-    - When formatting your query, start with ‘###Instruction###’, followed by either ‘###Example###’ or ‘###Question###’ if relevant. Subsequently, present your content. Use one or more line breaks to separate instructions, examples, questions, context, and input data.
+    def run(self, prompt: str) -> dict:
+        # Try three times to run the prompt
+        for _ in range(3):
+            try:
+                return self._run(prompt=prompt)
+            except Exception as e:
+                print(e)
 
-8. Task and Requirement:
-    - Incorporate the following phrases: 
-        - "Your task is to..."
-        - "You MUST..."
+        return {
+            "status": "error",
+            "message": "An unexpected error occurred. Please try again later."
+        }
 
-9. Penalization Warning:
-    - Incorporate the following phrases: 
-        - "You will be penalized..."
+    def _run(self, prompt: str) -> dict:
+        assert prompt is not None, "The prompt cannot be None."
+        assert isinstance(prompt, str), "The prompt must be a string."
+        assert len(prompt) > 0, "The prompt cannot be an empty string."
+        assert len(prompt.split()) <= 2500 * 4 / 3, f"The prompt cannot exceed {2500 * 4 / 3} words."
 
-10.Natural Response:
-    - Use the phrase "Answer a question given in a natural, human-like manner" in your query.
+        chain: LLMChain = self._build_chain()
+        assert chain is not None, "Internal error: 7."
 
-11. Leading Words:
-    - Guide step-by-step thinking.
-    - Use leading words like writing "think step by step"
+        response = chain.invoke(input={
+            "prompt_to_optimize": prompt,
+        })
 
-12. Unbiased Response:
-    - Add to your query the following phrase "Ensure that your answer is unbiased and avoids relying on stereotypes."
+        assert response is not None
+        assert response["text"] is not None
 
-13. Testing Understanding:
-    - To inquire about a specific topic or idea or any information and you want to test your understanding, you can use the following phrase: "Teach me any [theorem/topic/rule name] and include a test at the end, and let me know if my answers are correct after I respond, without providing the answers beforehand."
+        response = response["text"]
+        return {
+            "status": "success",
+            "optimized_prompt": response["optimized_prompt"],
+            "required_info": response["required_info"],
+        }
 
-14. Assign Role:
-    - Assign a role to the LLM.
-    - Example: "Your role is..."
-
-15. Delimiters Usage:
-    - Employ delimiters.
-
-16. Repetition:
-    -  Repeat a specific word or phrase multiple times within a query.
-
-17. Output Primers:
-    - Use output primers, which involve concluding your query with the beginning of the desired output. Utilize output primers by ending your prompt with the start of the anticipated response.
-
-18. Detailed Content:
-    - To write an essay /text /paragraph /article or any type of text that should be detailed: "Write a detailed [essay/text /paragraph] for me on [topic] in detail by adding all the information necessary".
-
-19. Text Correction:
-    - To correct/change specific text without changing its style: "Try to revise every paragraph sent by users. You should only improve the user’s grammar and vocabulary and make sure it sounds natural. You should maintain the original writing style, ensuring that a formal paragraph remains formal."
-
-20. Complex Coding Query:
-    - When you have a complex coding query that may be in different files: "From now and on whenever you generate code that spans more than one file, generate a [programming language ] script that can be run to automatically create the specified files or make changes to existing files to insert the generated code. [your question]".
-
-21. Initiate or Continue Text:
-    - When you want to initiate or continue a text using specific words, phrases, or sentences, utilize the following query: "I’m providing you with the beginning [song lyrics/story/paragraph/essay...]: [Insert lyrics/words/sentence]. Finish it based on the words provided. Keep the flow consistent."
-
-22. Clear Requirements:
-    - Clearly state the requirements that the model must follow in order to produce content, in the form of the keywords, regulations, hint, or instructions
-
-23. Text Similarity:
-    - To write any text, such as an essay or paragraph, that is intended to be similar to a provided sample, include the following instructions: "Use the same language based on the provided paragraph[/title/text /essay/answer]".
-        """
-        
+    def _build_chain(self) -> LLMChain:
+        # NOTE: Experimental, remove later
         optimizer_output_parser = StructuredOutputParser(response_schemas=[
-            ResponseSchema(name="optimized_prompt", description="This is the optimized prompt that was generated by following the guidelines."),
-            ResponseSchema(name="required_info", description="This is the additional information that was required to optimize the prompt. If no additional information was required, respond by saying 'No additional information was required.'."),
+            ResponseSchema(name="optimized_prompt",
+                           description="This is the optimized prompt that was generated by following the guidelines."),
+            ResponseSchema(name="required_info",
+                           description="This is the additional information that was required to optimize the prompt. "
+                                       "If no additional information was required, respond by saying 'No additional "
+                                       "information was required.'."),
         ])
-        
+
         optimizer_format_instructions = optimizer_output_parser.get_format_instructions()
+
+        optimizer_output_parser = OutputFixingParser.from_llm(parser=optimizer_output_parser, llm=self.__client)
         optimizer_prompt = PromptTemplate(
-            template=prompt,
+            template=PROMPT,
             input_types={
                 "format_instructions": str,
                 "guidelines": str,
@@ -183,7 +161,7 @@ Add newlines to the optimized query as needed.
             input_variables=["prompt_to_optimize"],
             partial_variables={
                 "format_instructions": optimizer_format_instructions,
-                "guidelines": guidelines
+                "guidelines": GUIDELINES
             },
             output_parser=optimizer_output_parser
         )

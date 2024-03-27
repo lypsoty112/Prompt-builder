@@ -1,8 +1,7 @@
 
 # Prompt-builder
 
-Prompt Builder is a small Python application that implements the principles outlined in the paper "[Principled Instructions Are All You Need for Questioning LLaMA-1/2, GPT-3.5/4](https://arxiv.org/abs/2312.16171)". It allows users to generate natural language prompts adhering to specific rules and guidelines defined in the paper.
-
+Prompt Builder is a small Python application that generates natural language prompts based on documentation and best practices from [OpenAI](https://platform.openai.com/docs/guides/prompt-engineering), Google (https://ai.google.dev/docs/prompt_best_practices & https://developers.google.com/machine-learning/resources/prompt-eng), [Anthropic](https://docs.anthropic.com/claude/docs/prompt-engineering), [Cohere](https://docs.cohere.com/docs/crafting-effective-prompts), and other leading AI companies. It utilizes GPT-4 to generate prompts adhering to specific rules and guidelines.
 ## Usage
 
 Simply past the prompt you want to optimize in the text box and click the "Optimize" button. The application will then generate a prompt that adheres to the guidelines outlined in the paper.
