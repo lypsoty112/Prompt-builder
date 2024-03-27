@@ -10,7 +10,11 @@ def main():
     dotenv.load_dotenv(".env")
 
     st.title("🛠️ PROMPT-BUILDER")
-
+    st.set_page_config(
+        page_title="PROMPT-BUILDER",
+        page_icon="🛠️",
+        layout="wide",
+    )
     placeholder = st.empty()
     # Read the README.md file
     with open('README.md', 'r') as file:
