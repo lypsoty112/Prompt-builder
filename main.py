@@ -8,7 +8,6 @@ import traceback
 def main():
     st.set_page_config(
         page_title="PROMPT-BUILDER",
-        page_icon="🛠️",
         layout="wide",
     )
     app = App()
