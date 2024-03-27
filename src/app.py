@@ -96,7 +96,7 @@ class App:
 
         self.__key = value
         self.__client = ChatOpenAI(api_key=self.__key,
-                                   model_name="gpt-4-0613",
+                                   model_name="gpt-4",
                                    temperature=.2,
                                    max_tokens=2000,
                                    max_retries=3)
