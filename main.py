@@ -9,6 +9,9 @@ def main():
     st.set_page_config(
         page_title="Prompt Builder",
         layout="wide",
+        initial_sidebar_state="expanded",
+        page_icon="🛠️"
+
     )
     app = App()
     dotenv.load_dotenv(".env")
